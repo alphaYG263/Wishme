@@ -11,6 +11,7 @@ interface WishCardProps {
   status: WishStatus;
   date: string;
   imageUrl: string;
+  onDelete?: () => void;
 }
 
 const statusColors = {

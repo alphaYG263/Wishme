@@ -1,3 +1,4 @@
+// src/pages/WaitingPage.tsx
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -16,10 +17,11 @@ interface WishData {
   password_hash?: string | null;
   status: string;
   views_count?: number;
+  custom_url: string;
 }
 
 const WaitingPage = () => {
-  const { id } = useParams();
+  const { region, vipSlot, wishName, id } = useParams();
   const navigate = useNavigate();
   const [wish, setWish] = useState<WishData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,7 @@ const WaitingPage = () => {
 
   useEffect(() => {
     fetchWish();
-  }, [id]);
+  }, [region, vipSlot, wishName, id]);
 
   useEffect(() => {
     if (wish) {
@@ -48,48 +50,68 @@ const WaitingPage = () => {
 
   const fetchWish = async () => {
     try {
-      const { data, error } = await supabase
-        .from('wishes')
-        .select('*')
-        .eq('id', id)
-        .single();
+      let wishData;
 
-      if (error) throw error;
+      // Handle legacy ID-based URLs
+      if (id) {
+        const { data, error } = await supabase
+          .from('wishes')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-      if (!data) {
+        if (error) throw error;
+        wishData = data;
+      } else {
+        // Handle new custom URL format
+        const customUrl = vipSlot 
+          ? `${region}/${vipSlot}/${wishName}`
+          : `${region}/${wishName}`;
+
+        const { data, error } = await supabase
+          .from('wishes')
+          .select('*')
+          .eq('custom_url', customUrl)
+          .single();
+
+        if (error) throw error;
+        wishData = data;
+      }
+
+      if (!wishData) {
         toast.error("Wish not found");
         navigate("/");
         return;
       }
 
       // Check if wish is expired
-      if (data.status === 'expired') {
-        navigate(`/wish/${id}/expired`);
+      if (wishData.status === 'expired') {
+        navigate(`/wish/${wishData.id}/expired`);
         return;
       }
 
       // Check if birthday has arrived
       const now = new Date();
-      const timePart = data.birthday_time ?? '00:00:00';
-      const birthdayDateTime = new Date(`${data.birthday_date}T${timePart}`);
+      const timePart = wishData.birthday_time ?? '00:00:00';
+      const birthdayDateTime = new Date(`${wishData.birthday_date}T${timePart}`);
       
       if (now >= birthdayDateTime) {
         // Check privacy before redirecting
-        if (data.privacy === 'private' && data.password_hash) {
+        if (wishData.privacy === 'private' && wishData.password_hash) {
           setShowPasswordForm(true);
+          setWish(wishData);
         } else {
-          // Update view count
-          await supabase
-            .from('wishes')
-            .update({ views_count: (data.views_count ?? 0) + 1 })
-            .eq('id', id);
-          
-          navigate(`/wish/${id}/view`);
+          // Redirect to birthday view using custom URL
+          if (wishData.custom_url) {
+            navigate(`/${wishData.custom_url}`);
+          } else {
+            navigate(`/wish/${wishData.id}/view`);
+          }
           return;
         }
       }
 
-      setWish(data);
+      setWish(wishData);
       calculateTimeLeft();
     } catch (error: any) {
       console.error('Error fetching wish:', error);
@@ -120,7 +142,11 @@ const WaitingPage = () => {
       if (wish.privacy === 'private' && wish.password_hash) {
         setShowPasswordForm(true);
       } else {
-        navigate(`/wish/${id}/view`);
+        if (wish.custom_url) {
+          navigate(`/${wish.custom_url}`);
+        } else {
+          navigate(`/wish/${wish.id}/view`);
+        }
       }
     }
   };
@@ -134,9 +160,13 @@ const WaitingPage = () => {
       await supabase
         .from('wishes')
         .update({ views_count: (wish.views_count ?? 0) + 1 })
-        .eq('id', id);
+        .eq('id', wish.id);
       
-      navigate(`/wish/${id}/view`);
+      if (wish.custom_url) {
+        navigate(`/${wish.custom_url}`);
+      } else {
+        navigate(`/wish/${wish.id}/view`);
+      }
     } else {
       toast.error("Incorrect password");
     }
@@ -156,7 +186,7 @@ const WaitingPage = () => {
   if (showPasswordForm) {
     return (
       <div className="min-h-screen gradient-primary flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
+        <div className="max-w-md w-full bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 animate-scale-in">
           <div className="text-center mb-6">
             <div className="inline-block p-4 rounded-full bg-white/20 mb-4">
               <Lock className="w-8 h-8 text-white" />
@@ -225,7 +255,7 @@ const WaitingPage = () => {
           <p className="text-2xl md:text-3xl font-light animate-fade-in" style={{ animationDelay: "200ms" }}>
             A magical surprise for
           </p>
-          <h1 className="text-4xl md:text-6xl font-bold animate-fade-in" style={{ animationDelay: "400ms" }}>
+          <h1 className="text-4xl md:text-6xl font-bold animate-fade-in drop-shadow-2xl" style={{ animationDelay: "400ms" }}>
             {wish.recipient_name}
           </h1>
           <p className="text-lg md:text-xl text-white/80 animate-fade-in" style={{ animationDelay: "600ms" }}>
@@ -243,7 +273,7 @@ const WaitingPage = () => {
         </div>
 
         {/* Countdown Timer */}
-        <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 md:p-12 border border-white/20 animate-scale-in" style={{ animationDelay: "800ms" }}>
+        <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 md:p-12 border border-white/20 shadow-2xl animate-scale-in" style={{ animationDelay: "800ms" }}>
           <div className="grid grid-cols-4 gap-4 md:gap-8">
             {[
               { label: "Days", value: timeLeft.days },
@@ -252,8 +282,8 @@ const WaitingPage = () => {
               { label: "Seconds", value: timeLeft.seconds },
             ].map((unit, index) => (
               <div key={unit.label} className="animate-fade-in" style={{ animationDelay: `${1000 + index * 100}ms` }}>
-                <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 md:p-6 mb-3">
-                  <span className="text-4xl md:text-6xl font-bold text-white tabular-nums">
+                <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 md:p-6 mb-3 shadow-lg">
+                  <span className="text-4xl md:text-6xl font-bold text-white tabular-nums drop-shadow-lg">
                     {String(unit.value).padStart(2, "0")}
                   </span>
                 </div>

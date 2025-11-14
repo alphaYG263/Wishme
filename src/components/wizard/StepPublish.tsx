@@ -1,9 +1,15 @@
-import { useState } from "react";
+// src/components/wizard/StepPublish.tsx
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Check, ExternalLink, Sparkles, Gift } from "lucide-react";
+import { Copy, Check, ExternalLink, Sparkles, Gift, Loader2, AlertCircle } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface StepPublishProps {
   data: any;
@@ -11,8 +17,171 @@ interface StepPublishProps {
 }
 
 const StepPublish = ({ data }: StepPublishProps) => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
-  const generatedUrl = `bestwishes.app/wish/${data.name?.toLowerCase().replace(/\s+/g, "-") || "example"}`;
+  const [publishing, setPublishing] = useState(false);
+  const [wishName, setWishName] = useState(data.name?.toLowerCase().replace(/\s+/g, "-") || "");
+  const [checking, setChecking] = useState(false);
+  const [urlAvailable, setUrlAvailable] = useState<boolean | null>(null);
+  const [suggestedUrl, setSuggestedUrl] = useState("");
+  const [userRegion, setUserRegion] = useState("");
+  const [isPremium, setIsPremium] = useState(false);
+
+  useEffect(() => {
+    fetchUserDetails();
+  }, [user]);
+
+  useEffect(() => {
+    if (wishName && userRegion) {
+      checkUrlAvailability();
+    }
+  }, [wishName, userRegion]);
+
+  const fetchUserDetails = async () => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('region, is_premium')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      setUserRegion(profile.region);
+      setIsPremium(profile.is_premium);
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+    }
+  };
+
+  const checkUrlAvailability = async () => {
+    if (!wishName || !userRegion) return;
+
+    setChecking(true);
+    try {
+      const customUrl = `${userRegion}/${wishName}`;
+      
+      const { data, error } = await supabase
+        .from('wishes')
+        .select('id')
+        .eq('custom_url', customUrl)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setUrlAvailable(false);
+        // Suggest alternative
+        setSuggestedUrl(`${wishName}-${Math.floor(Math.random() * 9999)}`);
+      } else {
+        setUrlAvailable(true);
+        setSuggestedUrl("");
+      }
+    } catch (error) {
+      console.error('Error checking URL:', error);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const findVipSlot = async () => {
+    const vipSlots = Array.from({ length: 10 }, (_, i) => `vip${i + 1}`);
+    
+    for (const slot of vipSlots) {
+      const customUrl = `${userRegion}/${slot}/${wishName}`;
+      
+      const { data, error } = await supabase
+        .from('wishes')
+        .select('id')
+        .eq('custom_url', customUrl)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') continue;
+      
+      if (!data) {
+        return customUrl;
+      }
+    }
+    
+    return null;
+  };
+
+  const handlePublish = async () => {
+    if (!urlAvailable && !isPremium) {
+      toast.error("This URL is not available. Please change the wish name or upgrade to Premium.");
+      return;
+    }
+
+    if (!data.name || !data.template || !data.date) {
+      toast.error("Please complete all required steps before publishing.");
+      return;
+    }
+
+    setPublishing(true);
+
+    try {
+      let finalUrl = `${userRegion}/${wishName}`;
+
+      // If premium and URL taken, find VIP slot
+      if (isPremium && !urlAvailable) {
+        const vipUrl = await findVipSlot();
+        if (!vipUrl) {
+          toast.error("All VIP slots are taken. Please try a different name.");
+          setPublishing(false);
+          return;
+        }
+        finalUrl = vipUrl;
+      }
+
+      // Create wish record
+      const { data: wishData, error: wishError } = await supabase
+        .from('wishes')
+        .insert({
+          user_id: user?.id,
+          recipient_name: data.name,
+          template_id: data.template,
+          status: 'scheduled',
+          birthday_date: data.date,
+          birthday_time: data.time || '00:00:00',
+          privacy: data.privacy,
+          password_hash: data.privacy === 'private' ? data.password : null,
+          custom_url: finalUrl,
+          music_id: data.song || 'happy',
+          views_count: 0
+        })
+        .select()
+        .single();
+
+      if (wishError) throw wishError;
+
+      // Upload images if any
+      if (data.images && data.images.length > 0) {
+        const imagePromises = data.images.map(async (image: File, index: number) => {
+          // In production, you'd upload to Supabase Storage
+          // For now, we'll store placeholder URLs
+          return supabase
+            .from('wish_images')
+            .insert({
+              wish_id: wishData.id,
+              image_url: `placeholder-${index}`,
+              order_index: index
+            });
+        });
+
+        await Promise.all(imagePromises);
+      }
+
+      toast.success("Birthday wish published successfully!");
+      navigate("/bestwishes/home");
+    } catch (error: any) {
+      console.error('Error publishing wish:', error);
+      toast.error(error.message || "Failed to publish wish");
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const generatedUrl = `bestwishes.app/${userRegion}/${wishName}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedUrl);
@@ -22,24 +191,98 @@ const StepPublish = ({ data }: StepPublishProps) => {
 
   return (
     <div className="space-y-6">
-      {/* Success Card */}
+      {/* URL Configuration */}
+      <div className="bg-card p-8 md:p-12 rounded-3xl shadow-lg">
+        <h2 className="text-3xl font-bold mb-3">Customize Your Wish URL</h2>
+        <p className="text-muted-foreground mb-6">
+          Choose a memorable URL for {data.name || "your loved one"}'s birthday wish
+        </p>
+
+        <div className="space-y-4">
+          <div>
+            <Label className="text-base mb-3 block">Wish Name (URL-friendly)</Label>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input
+                  value={wishName}
+                  onChange={(e) => {
+                    const cleaned = e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9-]/g, '-')
+                      .replace(/-+/g, '-');
+                    setWishName(cleaned);
+                  }}
+                  placeholder="e.g., sarah-birthday-2025"
+                  className="rounded-2xl h-14 text-base font-mono"
+                />
+              </div>
+              {checking && (
+                <Button disabled className="rounded-2xl">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                </Button>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Only lowercase letters, numbers, and hyphens allowed
+            </p>
+          </div>
+
+          {/* URL Preview */}
+          <div className="p-4 rounded-2xl bg-muted/50 border border-border">
+            <Label className="text-sm text-muted-foreground mb-2 block">Your Wish URL</Label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-lg font-mono text-foreground">
+                {generatedUrl}
+              </code>
+              {urlAvailable === true && (
+                <Badge className="bg-green-500">Available</Badge>
+              )}
+              {urlAvailable === false && !isPremium && (
+                <Badge variant="destructive">Taken</Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Availability Messages */}
+          {urlAvailable === false && !isPremium && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                This URL is already taken. Try: <strong>{suggestedUrl}</strong>
+                <br />
+                <span className="text-sm text-muted-foreground">
+                  Or upgrade to Premium for VIP URLs (vip1-vip10 slots)
+                </span>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {urlAvailable === false && isPremium && (
+            <Alert className="border-primary">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <AlertDescription>
+                This URL is taken, but as a Premium member, we'll automatically assign you a VIP slot (vip1-vip10).
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      </div>
+
+      {/* Success Preview Card */}
       <div className="bg-card p-8 md:p-12 rounded-3xl shadow-lg text-center">
         <div className="inline-flex p-6 rounded-full gradient-primary mb-6 animate-pulse-soft">
           <Gift className="w-16 h-16 text-white" />
         </div>
         
         <h2 className="text-3xl font-bold mb-3">
-          Your Birthday Wish is Ready! 🎉
+          Ready to Publish! 🎉
         </h2>
         <p className="text-muted-foreground text-lg mb-8">
           Share this special moment with {data.name || "your loved one"}
         </p>
 
-        {/* URL Display */}
-        <div className="max-w-2xl mx-auto">
-          <Label className="text-left block mb-3 text-base">
-            Shareable Link
-          </Label>
+        {/* Share URL */}
+        <div className="max-w-2xl mx-auto mb-6">
           <div className="flex gap-2">
             <Input
               value={generatedUrl}
@@ -49,6 +292,7 @@ const StepPublish = ({ data }: StepPublishProps) => {
             <Button
               onClick={handleCopy}
               className="rounded-2xl px-6 gradient-primary border-0"
+              disabled={!urlAvailable && !isPremium}
             >
               {copied ? (
                 <Check className="w-5 h-5" />
@@ -57,89 +301,84 @@ const StepPublish = ({ data }: StepPublishProps) => {
               )}
             </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-2 text-left">
-            This link will show a countdown until the birthday date
-          </p>
+        </div>
+
+        {/* Wish Details */}
+        <div className="bg-muted/30 rounded-2xl p-6 max-w-lg mx-auto space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Recipient:</span>
+            <span className="font-semibold">{data.name || "Not set"}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Template:</span>
+            <span className="font-semibold">{data.template || "Not selected"}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Birthday:</span>
+            <span className="font-semibold">
+              {data.date ? new Date(data.date).toLocaleDateString() : "Not set"}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Privacy:</span>
+            <Badge variant={data.privacy === "private" ? "secondary" : "outline"}>
+              {data.privacy === "private" ? "🔒 Private" : "🌍 Public"}
+            </Badge>
+          </div>
         </div>
       </div>
 
-      {/* Preview Card */}
-      <div className="bg-card p-8 rounded-3xl shadow-lg">
-        <h3 className="text-xl font-semibold mb-4">Waiting Page Preview</h3>
-        
-        <div className="rounded-2xl gradient-hero p-8 text-center space-y-6 border-2 border-border">
-          <div className="text-6xl animate-float">🎁</div>
-          
-          <div>
-            <p className="text-lg text-foreground/80 mb-2">
-              A special surprise awaits
-            </p>
-            <h4 className="text-3xl font-bold text-foreground">
-              {data.name || "Someone Special"}
-            </h4>
-          </div>
-
-          <div className="bg-card/80 backdrop-blur-sm rounded-xl p-6 inline-block">
-            <p className="text-sm text-muted-foreground mb-3">
-              Opens on {data.date ? new Date(data.date).toLocaleDateString() : "Birthday"}
-            </p>
-            <div className="flex justify-center gap-2 text-3xl font-mono font-bold">
-              <div className="bg-background px-4 py-3 rounded-lg">12</div>
-              <div>:</div>
-              <div className="bg-background px-4 py-3 rounded-lg">34</div>
-              <div>:</div>
-              <div className="bg-background px-4 py-3 rounded-lg">56</div>
+      {/* Premium Upgrade Banner */}
+      {!isPremium && urlAvailable === false && (
+        <div className="bg-card p-6 rounded-3xl shadow-lg gradient-primary text-white">
+          <div className="flex items-start gap-4">
+            <Sparkles className="w-6 h-6 shrink-0 mt-1" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-lg mb-2">
+                URL Taken? Upgrade to Premium!
+              </h4>
+              <p className="text-white/90 text-sm mb-4">
+                Get priority access to VIP URLs (vip1-vip10), custom domains, and unlimited wishes.
+              </p>
+              <Button
+                variant="secondary"
+                className="rounded-xl bg-white text-primary hover:bg-white/90"
+              >
+                Upgrade Now
+              </Button>
             </div>
           </div>
-
-          <div className="flex flex-wrap justify-center gap-3">
-            <Badge variant="secondary" className="rounded-xl px-4 py-2">
-              {data.privacy === "private" ? "🔒 Password Protected" : "🌍 Public"}
-            </Badge>
-            <Badge variant="outline" className="rounded-xl px-4 py-2">
-              Template: {data.template || "Not selected"}
-            </Badge>
-          </div>
         </div>
-      </div>
-
-      {/* Upgrade Suggestion */}
-      <div className="bg-card p-6 rounded-3xl shadow-lg gradient-primary text-white">
-        <div className="flex items-start gap-4">
-          <Sparkles className="w-6 h-6 shrink-0 mt-1" />
-          <div className="flex-1">
-            <h4 className="font-semibold text-lg mb-2">
-              Duplicate URL? Upgrade to Premium!
-            </h4>
-            <p className="text-white/90 text-sm mb-4">
-              Get priority access to custom URLs, exclusive templates, and unlimited wishes.
-            </p>
-            <Button
-              variant="secondary"
-              className="rounded-xl bg-white text-primary hover:bg-white/90"
-            >
-              Upgrade Now
-            </Button>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-4 justify-center pt-4">
         <Button
           size="lg"
+          onClick={handlePublish}
+          disabled={publishing || (!urlAvailable && !isPremium)}
           className="rounded-2xl gradient-primary border-0 hover:opacity-90 gap-2"
         >
-          <Check className="w-5 h-5" />
-          Publish Wish
+          {publishing ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Publishing...
+            </>
+          ) : (
+            <>
+              <Check className="w-5 h-5" />
+              Publish Wish
+            </>
+          )}
         </Button>
         <Button
           size="lg"
           variant="outline"
           className="rounded-2xl gap-2"
+          disabled={!urlAvailable && !isPremium}
         >
           <ExternalLink className="w-5 h-5" />
-          Preview Full Page
+          Preview
         </Button>
       </div>
     </div>

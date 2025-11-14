@@ -1,12 +1,8 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StepProps } from "@/pages/CreateWish";
 
-interface StepNameProps {
-  data: { name: string };
-  onUpdate: (data: { name: string }) => void;
-}
-
-const StepName = ({ data, onUpdate }: StepNameProps) => {
+const StepName = ({ data, onUpdate }: StepProps) => {
   return (
     <div className="bg-card p-8 md:p-12 rounded-3xl shadow-lg">
       <div className="mb-8">
@@ -36,3 +32,4 @@ const StepName = ({ data, onUpdate }: StepNameProps) => {
 };
 
 export default StepName;
+

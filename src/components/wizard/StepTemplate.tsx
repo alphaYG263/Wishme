@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, Check } from "lucide-react";
+import { StepProps } from "@/pages/CreateWish";
 
 const templates = [
   { id: "sunset", name: "Sunset Dreams", images: 5, premium: false },
@@ -13,12 +14,7 @@ const templates = [
   { id: "vintage", name: "Vintage Memories", images: 6, premium: false },
 ];
 
-interface StepTemplateProps {
-  data: { template: string };
-  onUpdate: (data: { template: string }) => void;
-}
-
-const StepTemplate = ({ data, onUpdate }: StepTemplateProps) => {
+const StepTemplate = ({ data, onUpdate }: StepProps) => {
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null);
 
   return (
@@ -84,3 +80,4 @@ const StepTemplate = ({ data, onUpdate }: StepTemplateProps) => {
 };
 
 export default StepTemplate;
+

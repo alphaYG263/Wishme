@@ -47,7 +47,10 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              {/* Authentication */}
               <Route path="/" element={<Login />} />
+              
+              {/* Protected User Routes */}
               <Route path="/bestwishes/home" element={
                 <ProtectedRoute>
                   <Home />
@@ -58,9 +61,19 @@ const App = () => (
                   <CreateWish />
                 </ProtectedRoute>
               } />
+              
+              {/* Legacy wish routes (for backwards compatibility) */}
               <Route path="/wish/:id" element={<WaitingPage />} />
               <Route path="/wish/:id/view" element={<BirthdayView />} />
               <Route path="/wish/:id/expired" element={<ExpiredPage />} />
+              
+              {/* Dynamic wish routes - Standard: /region/wish-name */}
+              <Route path="/:region/:wishName" element={<BirthdayView />} />
+              
+              {/* Dynamic wish routes - VIP: /region/vip1-10/wish-name */}
+              <Route path="/:region/:vipSlot/:wishName" element={<BirthdayView />} />
+              
+              {/* 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>

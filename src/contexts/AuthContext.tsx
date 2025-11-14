@@ -58,12 +58,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signUp = async (email: string, password: string, username: string, region: string) => {
     try {
-      // Sign up the user
+      // Sign up WITHOUT email confirmation requirement
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { username, region }
+          data: { username, region },
+          emailRedirectTo: undefined // Disable email confirmation
         }
       });
 
@@ -85,6 +86,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('Profile creation error:', profileError);
         // Continue anyway as user was created
       }
+
+      // Automatically sign in the user after signup
+      await signIn(email, password);
     } catch (error: any) {
       console.error('Sign up error:', error);
       throw new Error(error.message || 'Failed to sign up');

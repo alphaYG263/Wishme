@@ -50,13 +50,8 @@ const Login = () => {
     try {
       if (isSignUp) {
         await signUp(email, password, username, region);
-        toast.success("Account created! Please check your email to verify.");
-        // Clear form
-        setEmail("");
-        setPassword("");
-        setUsername("");
-        setRegion("");
-        setIsSignUp(false);
+        toast.success("Account created successfully! Logging you in...");
+        // User will be automatically redirected by useEffect
       } else {
         await signIn(email, password);
         toast.success("Welcome back!");
@@ -192,7 +187,7 @@ const Login = () => {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Loading...
+                  {isSignUp ? "Creating Account..." : "Signing In..."}
                 </>
               ) : (
                 isSignUp ? "Sign Up" : "Sign In"

@@ -1,38 +1,165 @@
+// src/pages/BirthdayView.tsx
 import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Music, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, ChevronRight, Volume2, VolumeX, Loader2 } from "lucide-react";
+
+interface WishData {
+  id: string;
+  recipient_name: string;
+  birthday_date: string;
+  template_id: string;
+  music_id: string;
+}
+
+interface WishImage {
+  id: string;
+  image_url: string;
+  order_index: number;
+}
 
 const BirthdayView = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [wish, setWish] = useState<WishData | null>(null);
+  const [images, setImages] = useState<WishImage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showConfetti, setShowConfetti] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
-  
-  const slides = [
-    { type: "message", content: "Happy Birthday, Sarah! 🎉" },
-    { type: "image", content: "Photo 1" },
-    { type: "image", content: "Photo 2" },
-    { type: "image", content: "Photo 3" },
-    { type: "message", content: "Wishing you a day filled with love and joy! ❤️" },
-    { type: "image", content: "Photo 4" },
-    { type: "message", content: "Here's to another amazing year! 🥳" },
-  ];
 
   useEffect(() => {
-    // Auto-advance slides
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 5000);
+    fetchWishData();
+  }, [id]);
 
-    return () => clearInterval(timer);
-  }, [slides.length]);
+  const fetchWishData = async () => {
+    try {
+      // Fetch wish details
+      const { data: wishData, error: wishError } = await supabase
+        .from('wishes')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (wishError) throw wishError;
+      if (!wishData) {
+        toast.error("Wish not found");
+        navigate("/");
+        return;
+      }
+
+      // Check if wish has expired
+      if (wishData.status === 'expired') {
+        navigate(`/wish/${id}/expired`);
+        return;
+      }
+
+      // Fetch wish images
+      const { data: imagesData, error: imagesError } = await supabase
+        .from('wish_images')
+        .select('*')
+        .eq('wish_id', id)
+        .order('order_index', { ascending: true });
+
+      if (imagesError) throw imagesError;
+
+      setWish(wishData);
+      setImages(imagesData || []);
+
+      // Update wish status to active if not already
+      if (wishData.status !== 'active') {
+        await supabase
+          .from('wishes')
+          .update({ status: 'active' })
+          .eq('id', id);
+      }
+    } catch (error: any) {
+      console.error('Error fetching wish:', error);
+      toast.error(error.message || 'Failed to load birthday wish');
+      navigate("/");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loading && images.length > 0) {
+      // Auto-advance slides
+      const timer = setInterval(() => {
+        setCurrentSlide((prev) => (prev + 1) % getTotalSlides());
+      }, 5000);
+
+      return () => clearInterval(timer);
+    }
+  }, [loading, images]);
+
+  const getTotalSlides = () => {
+    // Opening message + images + closing message
+    return 1 + images.length + 1;
+  };
 
   const nextSlide = () => {
-    setCurrentSlide((prev) => (prev + 1) % slides.length);
+    setCurrentSlide((prev) => (prev + 1) % getTotalSlides());
   };
 
   const prevSlide = () => {
-    setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+    setCurrentSlide((prev) => (prev - 1 + getTotalSlides()) % getTotalSlides());
   };
+
+  const renderSlideContent = () => {
+    const totalSlides = getTotalSlides();
+
+    // Opening message
+    if (currentSlide === 0) {
+      return (
+        <div className="aspect-video flex items-center justify-center p-12 text-center">
+          <h2 className="text-4xl md:text-6xl font-bold text-white animate-fade-in">
+            Happy Birthday, {wish?.recipient_name}! 🎉
+          </h2>
+        </div>
+      );
+    }
+
+    // Images
+    if (currentSlide > 0 && currentSlide <= images.length) {
+      const image = images[currentSlide - 1];
+      return (
+        <div className="aspect-video flex items-center justify-center bg-black">
+          <img
+            src={image.image_url}
+            alt={`Memory ${currentSlide}`}
+            className="w-full h-full object-contain"
+          />
+        </div>
+      );
+    }
+
+    // Closing message
+    return (
+      <div className="aspect-video flex items-center justify-center p-12 text-center">
+        <h2 className="text-4xl md:text-6xl font-bold text-white animate-fade-in">
+          Here's to another amazing year! 🥳
+        </h2>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen gradient-primary flex items-center justify-center">
+        <div className="text-center text-white">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
+          <p>Loading birthday wish...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!wish) return null;
+
+  const totalSlides = getTotalSlides();
 
   return (
     <div className="min-h-screen gradient-primary relative overflow-hidden">
@@ -77,7 +204,7 @@ const BirthdayView = () => {
           </Button>
 
           <div className="flex gap-2">
-            {slides.map((_, index) => (
+            {[...Array(totalSlides)].map((_, index) => (
               <div
                 key={index}
                 className={`h-1 rounded-full transition-all ${
@@ -103,17 +230,7 @@ const BirthdayView = () => {
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="max-w-4xl w-full">
             <div className="relative bg-white/10 backdrop-blur-md rounded-3xl overflow-hidden border border-white/20 shadow-2xl animate-scale-in">
-              {slides[currentSlide].type === "message" ? (
-                <div className="aspect-video flex items-center justify-center p-12 text-center">
-                  <h2 className="text-4xl md:text-6xl font-bold text-white animate-fade-in">
-                    {slides[currentSlide].content}
-                  </h2>
-                </div>
-              ) : (
-                <div className="aspect-video flex items-center justify-center gradient-hero">
-                  <div className="text-white/50 text-6xl">📷</div>
-                </div>
-              )}
+              {renderSlideContent()}
 
               {/* Navigation Buttons */}
               <Button
@@ -140,7 +257,7 @@ const BirthdayView = () => {
         {/* Footer */}
         <footer className="p-6 text-center">
           <p className="text-white/80 text-sm">
-            Slide {currentSlide + 1} of {slides.length}
+            Slide {currentSlide + 1} of {totalSlides}
           </p>
         </footer>
       </div>

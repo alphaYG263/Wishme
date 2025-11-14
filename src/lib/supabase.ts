@@ -1,35 +1,55 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+// Extract just the URL from the connection string
+const supabaseUrl = 'https://ksbgplhktuxqnhhjmjdo.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables!');
-  console.error('VITE_SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
-  console.error('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Missing');
+if (!supabaseAnonKey) {
+  console.error('Missing VITE_SUPABASE_ANON_KEY environment variable!');
 }
 
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey || '');
 
 // Auth helpers
 export const signUp = async (email: string, password: string, username: string, region: string) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
+  try {
+    // First, sign up the user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          username,
+          region,
+        }
+      }
+    });
+    
+    if (authError) throw authError;
+    if (!authData.user) throw new Error('No user data returned');
+
+    // Then create the profile
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
         username,
         region,
-      }
+        is_premium: false,
+        google_auth_enabled: false
+      });
+
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // Don't throw, as auth user was created successfully
     }
-  });
-  
-  if (error) throw error;
-  return data;
+    
+    return authData;
+  } catch (error) {
+    console.error('SignUp error:', error);
+    throw error;
+  }
 };
 
 export const signIn = async (email: string, password: string) => {

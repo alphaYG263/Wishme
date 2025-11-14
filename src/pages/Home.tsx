@@ -1,8 +1,9 @@
+// src/pages/Home.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, LogOut, Loader2 } from "lucide-react";
+import { Plus, LogOut, Loader2, RefreshCw } from "lucide-react";
 import WishCard from "@/components/WishCard";
 import PremiumBanner from "@/components/PremiumBanner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +24,7 @@ const Home = () => {
   const { user, signOut } = useAuth();
   const [wishes, setWishes] = useState<Wish[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [username, setUsername] = useState("");
   const [region, setRegion] = useState("");
 
@@ -37,11 +39,17 @@ const Home = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, region')
+        .select('username, region, is_premium')
         .eq('id', user?.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Profile fetch error:', error);
+        // Fallback to user metadata
+        setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
+        setRegion(user?.user_metadata?.region || "Unknown");
+        return;
+      }
       
       if (data) {
         setUsername(data.username);
@@ -49,15 +57,16 @@ const Home = () => {
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      // Fallback to user metadata if profile not found
       setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
       setRegion(user?.user_metadata?.region || "Unknown");
     }
   };
 
-  const fetchWishes = async () => {
+  const fetchWishes = async (showRefreshToast = false) => {
     try {
-      setLoading(true);
+      if (showRefreshToast) setRefreshing(true);
+      else setLoading(true);
+
       const { data, error } = await supabase
         .from('wishes')
         .select(`
@@ -80,11 +89,16 @@ const Home = () => {
       }));
 
       setWishes(mappedWishes);
-    } catch (error) {
+      
+      if (showRefreshToast) {
+        toast.success('Wishes refreshed');
+      }
+    } catch (error: any) {
       console.error('Error fetching wishes:', error);
-      toast.error('Failed to load wishes');
+      toast.error(error.message || 'Failed to load wishes');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -98,9 +112,9 @@ const Home = () => {
       await signOut();
       toast.success('Signed out successfully');
       navigate('/');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing out:', error);
-      toast.error('Failed to sign out');
+      toast.error(error.message || 'Failed to sign out');
     }
   };
 
@@ -114,12 +128,11 @@ const Home = () => {
 
       if (error) throw error;
 
-      // Update local state
       setWishes(wishes.filter(wish => wish.id !== wishId));
       toast.success('Wish deleted successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting wish:', error);
-      toast.error('Failed to delete wish');
+      toast.error(error.message || 'Failed to delete wish');
     }
   };
 
@@ -154,11 +167,21 @@ const Home = () => {
 
             <div className="flex items-center gap-3">
               <Button
+                onClick={() => fetchWishes(true)}
+                variant="ghost"
+                size="icon"
+                className="rounded-xl"
+                disabled={refreshing}
+              >
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </Button>
+
+              <Button
                 onClick={() => navigate("/bestwishes/create")}
                 className="rounded-2xl gradient-primary border-0 hover:opacity-90 gap-2"
               >
                 <Plus className="w-5 h-5" />
-                Create Wish
+                <span className="hidden sm:inline">Create Wish</span>
               </Button>
 
               <Button
@@ -167,7 +190,7 @@ const Home = () => {
                 className="rounded-2xl gap-2"
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
+                <span className="hidden sm:inline">Sign Out</span>
               </Button>
             </div>
           </div>
@@ -179,7 +202,7 @@ const Home = () => {
         <div className="mb-8 animate-fade-in">
           <h2 className="text-3xl font-bold mb-2">Your Birthday Wishes</h2>
           <p className="text-muted-foreground">
-            Manage and track all your magical birthday surprises
+            Manage and track all your magical birthday surprises ({wishes.length} total)
           </p>
         </div>
 

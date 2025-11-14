@@ -1,5 +1,5 @@
 // src/pages/Login.tsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Gift } from "lucide-react";
+import { Gift, Loader2 } from "lucide-react";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, loading: authLoading } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,25 +19,68 @@ const Login = () => {
   const [region, setRegion] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate("/bestwishes/home");
+    }
+  }, [user, authLoading, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    if (!email || !password) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (isSignUp && (!username || !region)) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isSignUp) {
         await signUp(email, password, username, region);
         toast.success("Account created! Please check your email to verify.");
+        // Clear form
+        setEmail("");
+        setPassword("");
+        setUsername("");
+        setRegion("");
+        setIsSignUp(false);
       } else {
         await signIn(email, password);
         toast.success("Welcome back!");
         navigate("/bestwishes/home");
       }
     } catch (error: any) {
+      console.error("Auth error:", error);
       toast.error(error.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth status
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center gradient-soft">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center gradient-soft p-4">
@@ -74,21 +117,22 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {isSignUp && (
               <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
+                <Label htmlFor="username">Username *</Label>
                 <Input
                   id="username"
                   type="text"
                   placeholder="Choose a username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  required
+                  required={isSignUp}
                   className="rounded-2xl"
+                  disabled={loading}
                 />
               </div>
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email *</Label>
               <Input
                 id="email"
                 type="email"
@@ -97,11 +141,12 @@ const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="rounded-2xl"
+                disabled={loading}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Password * (min 6 characters)</Label>
               <Input
                 id="password"
                 type="password"
@@ -109,14 +154,21 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={6}
                 className="rounded-2xl"
+                disabled={loading}
               />
             </div>
 
             {isSignUp && (
               <div className="space-y-2">
-                <Label htmlFor="region">Region</Label>
-                <Select value={region} onValueChange={setRegion} required>
+                <Label htmlFor="region">Region *</Label>
+                <Select 
+                  value={region} 
+                  onValueChange={setRegion} 
+                  required={isSignUp}
+                  disabled={loading}
+                >
                   <SelectTrigger id="region" className="rounded-2xl">
                     <SelectValue placeholder="Select your region" />
                   </SelectTrigger>
@@ -137,7 +189,14 @@ const Login = () => {
               className="w-full rounded-2xl h-12 text-base font-medium gradient-primary border-0 hover:opacity-90 transition-opacity"
               disabled={loading}
             >
-              {loading ? "Loading..." : isSignUp ? "Sign Up" : "Sign In"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                isSignUp ? "Sign Up" : "Sign In"
+              )}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
@@ -146,8 +205,13 @@ const Login = () => {
                   Already have an account?{" "}
                   <button
                     type="button"
-                    onClick={() => setIsSignUp(false)}
+                    onClick={() => {
+                      setIsSignUp(false);
+                      setUsername("");
+                      setRegion("");
+                    }}
                     className="text-primary font-medium hover:underline"
+                    disabled={loading}
                   >
                     Sign in
                   </button>
@@ -159,6 +223,7 @@ const Login = () => {
                     type="button"
                     onClick={() => setIsSignUp(true)}
                     className="text-primary font-medium hover:underline"
+                    disabled={loading}
                   >
                     Sign up
                   </button>

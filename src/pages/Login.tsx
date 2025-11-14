@@ -1,3 +1,4 @@
+// src/pages/Login.tsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,17 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Gift } from "lucide-react";
-import heroImage from "@/assets/birthday-hero.jpg";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth(); // Using the auth context
-  const [isSignUp, setIsSignUp] = useState(false); // To toggle between SignUp and Login
+  const { signIn, signUp } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [username, setUsername] = useState(""); // For SignUp
+  const [username, setUsername] = useState("");
   const [region, setRegion] = useState("");
-  const [loading, setLoading] = useState(false); // For loading state
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,11 +25,9 @@ const Login = () => {
 
     try {
       if (isSignUp) {
-        // Sign Up
         await signUp(email, password, username, region);
         toast.success("Account created! Please check your email to verify.");
       } else {
-        // Sign In
         await signIn(email, password);
         toast.success("Welcome back!");
         navigate("/bestwishes/home");
@@ -44,13 +42,13 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center gradient-soft p-4">
       <div className="w-full max-w-6xl grid md:grid-cols-2 gap-8 items-center animate-fade-in">
-        {/* Hero Image */}
-        <div className="hidden md:block">
-          <img 
-            src={heroImage} 
-            alt="Birthday celebration" 
-            className="w-full h-auto rounded-3xl shadow-2xl animate-float"
-          />
+        {/* Hero Section */}
+        <div className="hidden md:flex flex-col items-center justify-center p-12 bg-gradient-primary rounded-3xl text-white">
+          <div className="text-8xl mb-6 animate-float">🎁</div>
+          <h2 className="text-4xl font-bold mb-4">Create Magical Moments</h2>
+          <p className="text-white/80 text-center text-lg">
+            Design beautiful birthday wishes with countdowns, photos, and music
+          </p>
         </div>
 
         {/* Login Form */}
@@ -142,38 +140,28 @@ const Login = () => {
               {loading ? "Loading..." : isSignUp ? "Sign Up" : "Sign In"}
             </Button>
 
-            {!isSignUp && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full rounded-2xl h-12 text-base"
-              >
-                Setup Google Authenticator
-              </Button>
-            )}
-
             <p className="text-center text-sm text-muted-foreground">
               {isSignUp ? (
                 <>
                   Already have an account?{" "}
-                  <a
-                    href="#"
+                  <button
+                    type="button"
                     onClick={() => setIsSignUp(false)}
                     className="text-primary font-medium hover:underline"
                   >
                     Sign in
-                  </a>
+                  </button>
                 </>
               ) : (
                 <>
                   Don't have an account?{" "}
-                  <a
-                    href="#"
+                  <button
+                    type="button"
                     onClick={() => setIsSignUp(true)}
                     className="text-primary font-medium hover:underline"
                   >
                     Sign up
-                  </a>
+                  </button>
                 </>
               )}
             </p>

@@ -19,7 +19,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check active session
     const checkSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -36,7 +35,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     checkSession();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       console.log('Auth state changed:', _event);
       setUser(session?.user ?? null);
@@ -56,39 +54,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+// src/contexts/AuthContext.tsx - Replace signUp function
+
   const signUp = async (email: string, password: string, username: string, region: string) => {
     try {
-      // Sign up WITHOUT email confirmation requirement
-      const { data, error } = await supabase.auth.signUp({
+      // Step 0: Ensure clean state
+      console.log('Signing up new user...');
+      await supabase.auth.signOut(); // Clear any existing session
+      
+      // Step 1: Create auth user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: { username, region },
-          emailRedirectTo: undefined // Disable email confirmation
+          emailRedirectTo: undefined
         }
       });
 
-      if (error) throw error;
-      if (!data.user) throw new Error('No user data returned');
+      if (authError) throw authError;
+      if (!authData.user) throw new Error('No user data returned');
 
-      // Create profile record
-      const { error: profileError } = await supabase
+      console.log('✅ Auth user created:', authData.user.id);
+      console.log('User metadata:', authData.user.user_metadata);
+
+      // Step 2: Wait for trigger to create profile
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Longer wait
+
+      // Step 3: Verify profile was created by trigger
+      const { data: profile, error: profileCheckError } = await supabase
         .from('profiles')
-        .insert({
-          id: data.user.id,
-          username,
-          region,
-          is_premium: false,
-          google_auth_enabled: false
-        });
+        .select('*')
+        .eq('id', authData.user.id)
+        .maybeSingle();
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // Continue anyway as user was created
+      if (profileCheckError) {
+        console.error('Profile check error:', profileCheckError);
       }
 
-      // Automatically sign in the user after signup
+      if (profile) {
+        console.log('✅ Profile confirmed:', profile);
+      } else {
+        console.warn('⚠️ Profile not found, trigger may have failed');
+        toast.warning('Profile creation delayed, but you can continue.');
+      }
+
+      // Step 4: Sign in the NEW user
+      console.log('Signing in new user...');
+      
+      // Clear storage first
+      localStorage.clear();
+      sessionStorage.clear();
+      
       await signIn(email, password);
+      
+      toast.success('Account created successfully!');
     } catch (error: any) {
       console.error('Sign up error:', error);
       throw new Error(error.message || 'Failed to sign up');

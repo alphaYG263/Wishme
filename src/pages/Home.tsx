@@ -38,18 +38,45 @@ const Home = () => {
     }
   }, [user]);
 
+// src/pages/Home.tsx - REPLACE fetchUserProfile function
+
   const fetchUserProfile = async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('username, region, is_premium')
         .eq('id', user?.id)
-        .single();
+        .maybeSingle(); // ✅ Changed from .single() to .maybeSingle()
 
       if (error) {
         console.error('Profile fetch error:', error);
+        // ✅ Use fallback data from user metadata
         setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
         setRegion(user?.user_metadata?.region || "Unknown");
+        setIsPremium(false);
+        
+        // ✅ Try to create profile if it doesn't exist
+        if (user?.id) {
+          console.log('Profile not found, creating one...');
+          const { error: createError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+              region: user.user_metadata?.region || 'AS',
+              is_premium: false,
+              google_auth_enabled: false
+            });
+          
+          if (createError) {
+            console.error('Failed to create profile:', createError);
+            toast.warning('Using temporary profile. Some features may be limited.');
+          } else {
+            toast.success('Profile created!');
+            // Refresh to get new profile
+            fetchUserProfile();
+          }
+        }
         return;
       }
       
@@ -57,11 +84,18 @@ const Home = () => {
         setUsername(data.username);
         setRegion(data.region);
         setIsPremium(data.is_premium);
+      } else {
+        // ✅ No profile exists - use fallback
+        setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
+        setRegion(user?.user_metadata?.region || "Unknown");
+        setIsPremium(false);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
+      // ✅ Always provide fallback
       setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
       setRegion(user?.user_metadata?.region || "Unknown");
+      setIsPremium(false);
     }
   };
 

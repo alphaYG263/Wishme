@@ -3,16 +3,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Heart, Sparkles } from "lucide-react";
-
-// Define StepProps inline for standalone use
-interface StepProps {
-  data: {
-    name?: string;
-    noteMessage?: string;
-    [key: string]: any;
-  };
-  onUpdate: (data: any) => void;
-}
+import { StepProps } from "@/pages/CreateWish";
 
 const StepNoteMessage = ({ data, onUpdate }: StepProps) => {
   const maxChars = 500;

@@ -4,7 +4,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Volume2, VolumeX, Loader2, Heart } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Volume2, VolumeX, Loader2, Lock } from "lucide-react";
 
 interface WishData {
   id: string;
@@ -13,6 +14,8 @@ interface WishData {
   template_id: string;
   music_id: string;
   custom_url: string;
+  privacy: string;
+  password_hash: string | null;
 }
 
 interface WishImage {
@@ -26,38 +29,38 @@ const TEMPLATES = {
   sunset: {
     name: "Sunset Dreams",
     gradient: "from-orange-400 via-pink-500 to-purple-600",
-    animation: "sunset",
-    particles: "🌅"
+    particles: "💖",
+    animation: "sunset"
   },
   starry: {
     name: "Starry Night",
     gradient: "from-indigo-900 via-purple-900 to-black",
-    animation: "starry",
-    particles: "⭐"
+    particles: "⭐",
+    animation: "starry"
   },
   garden: {
     name: "Garden Party",
     gradient: "from-green-400 via-emerald-500 to-teal-600",
-    animation: "garden",
-    particles: "🌸"
+    particles: "🌸",
+    animation: "garden"
   },
   ocean: {
     name: "Ocean Breeze",
     gradient: "from-cyan-400 via-blue-500 to-indigo-600",
-    animation: "ocean",
-    particles: "🌊"
+    particles: "🌊",
+    animation: "ocean"
   },
   cosmic: {
     name: "Cosmic Voyage",
     gradient: "from-purple-900 via-pink-800 to-red-900",
-    animation: "cosmic",
-    particles: "✨"
+    particles: "✨",
+    animation: "cosmic"
   },
   vintage: {
     name: "Vintage Memories",
     gradient: "from-amber-400 via-orange-500 to-red-500",
-    animation: "vintage",
-    particles: "📷"
+    particles: "📷",
+    animation: "vintage"
   }
 };
 
@@ -68,9 +71,13 @@ const BirthdayView = () => {
   const [images, setImages] = useState<WishImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showMessage, setShowMessage] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [heartsArray, setHeartsArray] = useState<Array<{ id: number; left: number }>>([]);
+  
+  // Password protection state
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordVerified, setPasswordVerified] = useState(false);
 
   const template = wish?.template_id && TEMPLATES[wish.template_id as keyof typeof TEMPLATES] 
     ? TEMPLATES[wish.template_id as keyof typeof TEMPLATES]
@@ -81,7 +88,6 @@ const BirthdayView = () => {
   }, [region, vipSlot, wishName]);
 
   useEffect(() => {
-    // Generate floating particles
     const heartInterval = setInterval(() => {
       setHeartsArray(prev => [
         ...prev,
@@ -93,7 +99,6 @@ const BirthdayView = () => {
   }, []);
 
   useEffect(() => {
-    // Clean up old particles
     const cleanup = setInterval(() => {
       setHeartsArray(prev => prev.slice(-10));
     }, 5000);
@@ -135,6 +140,14 @@ const BirthdayView = () => {
         return;
       }
 
+      // Check for password protection
+      if (wishData.privacy === 'private' && wishData.password_hash && !passwordVerified) {
+        setWish(wishData);
+        setShowPasswordPrompt(true);
+        setLoading(false);
+        return;
+      }
+
       const { data: imagesData, error: imagesError } = await supabase
         .from('wish_images')
         .select('*')
@@ -164,12 +177,63 @@ const BirthdayView = () => {
     }
   };
 
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === wish?.password_hash) {
+      setPasswordVerified(true);
+      setShowPasswordPrompt(false);
+      fetchWishData(); // Reload with password verified
+    } else {
+      toast.error("Incorrect password");
+      setPasswordInput("");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen gradient-primary flex items-center justify-center">
         <div className="text-center text-white">
           <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
           <p>Loading birthday wish...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Password prompt UI
+  if (showPasswordPrompt && !passwordVerified) {
+    return (
+      <div className={`min-h-screen bg-gradient-to-br ${template.gradient} flex items-center justify-center p-4`}>
+        <div className="max-w-md w-full bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 animate-scale-in">
+          <div className="text-center mb-6">
+            <div className="inline-block p-4 rounded-full bg-white/20 mb-4">
+              <Lock className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">
+              Password Protected
+            </h2>
+            <p className="text-white/80">
+              This birthday wish is private
+            </p>
+          </div>
+
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <Input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder="Enter password"
+              className="rounded-2xl bg-white/20 border-white/30 text-white placeholder:text-white/50 h-12"
+              required
+              autoFocus
+            />
+            <Button 
+              type="submit" 
+              className="w-full rounded-2xl bg-white text-primary hover:bg-white/90 h-12 font-semibold"
+            >
+              Unlock Birthday Wish
+            </Button>
+          </form>
         </div>
       </div>
     );
@@ -281,33 +345,31 @@ const BirthdayView = () => {
       {/* Main Content */}
       <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
         {/* Birthday Message */}
-        {showMessage && (
-          <div className="text-center mb-12 animate-fade-in-scale">
-            <div className="inline-block mb-8">
-              <div className="text-8xl md:text-9xl animate-bounce-slow">
-                🎂
-              </div>
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 animate-slide-up drop-shadow-2xl">
-              Happy Birthday
-            </h1>
-            
-            <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-8 animate-slide-up animation-delay-200 drop-shadow-xl">
-              {wish.recipient_name}!
-            </h2>
-
-            <div className="flex flex-wrap justify-center gap-4 text-3xl md:text-5xl animate-slide-up animation-delay-400">
-              <span className="animate-bounce animation-delay-100">🎉</span>
-              <span className="animate-bounce animation-delay-200">🎈</span>
-              <span className="animate-bounce animation-delay-300">🎁</span>
-              <span className="animate-bounce animation-delay-400">✨</span>
-              <span className="animate-bounce animation-delay-500">🎊</span>
+        <div className="text-center mb-12 animate-fade-in-scale">
+          <div className="inline-block mb-8">
+            <div className="text-8xl md:text-9xl animate-bounce-slow">
+              🎂
             </div>
           </div>
-        )}
+          
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 animate-slide-up drop-shadow-2xl">
+            Happy Birthday
+          </h1>
+          
+          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-8 animate-slide-up animation-delay-200 drop-shadow-xl">
+            {wish.recipient_name}!
+          </h2>
 
-        {/* Image Display with Animations */}
+          <div className="flex flex-wrap justify-center gap-4 text-3xl md:text-5xl animate-slide-up animation-delay-400">
+            <span className="animate-bounce animation-delay-100">🎉</span>
+            <span className="animate-bounce animation-delay-200">🎈</span>
+            <span className="animate-bounce animation-delay-300">🎁</span>
+            <span className="animate-bounce animation-delay-400">✨</span>
+            <span className="animate-bounce animation-delay-500">🎊</span>
+          </div>
+        </div>
+
+        {/* Image Display */}
         {images.length > 0 && (
           <div className="relative w-full max-w-4xl mb-12">
             <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white/30 backdrop-blur-sm">
@@ -326,10 +388,8 @@ const BirthdayView = () => {
                     className="w-full h-full object-cover"
                   />
                   
-                  {/* Photo Frame Effect */}
                   <div className="absolute inset-0 border-8 border-white/20 pointer-events-none" />
                   
-                  {/* Sparkle Effects */}
                   {index === currentImageIndex && (
                     <>
                       <div className="absolute top-4 right-4 text-3xl animate-ping">
@@ -344,7 +404,6 @@ const BirthdayView = () => {
               ))}
             </div>
 
-            {/* Image Indicators */}
             {images.length > 1 && (
               <div className="flex justify-center gap-2 mt-6">
                 {images.map((_, index) => (
@@ -390,7 +449,7 @@ const BirthdayView = () => {
         </div>
       </div>
 
-      {/* Additional CSS for custom animations */}
+      {/* CSS for animations */}
       <style>{`
         @keyframes float-up {
           from {

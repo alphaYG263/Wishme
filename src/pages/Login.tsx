@@ -1,4 +1,5 @@
-// src/pages/Login.tsx
+// src/pages/Login.tsx - Add this at the top of the component
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Gift, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase"; // Add this import
 
 const Login = () => {
   const navigate = useNavigate();
@@ -19,9 +21,23 @@ const Login = () => {
   const [region, setRegion] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // ✅ Clear any stale sessions on component mount
+  useEffect(() => {
+    const clearStaleSession = async () => {
+      // Only clear if we're not authenticated
+      if (!user && !authLoading) {
+        await supabase.auth.signOut();
+        localStorage.removeItem('supabase.auth.token');
+        sessionStorage.clear();
+      }
+    };
+    clearStaleSession();
+  }, []);
+
   // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user) {
+      console.log('User logged in, redirecting...', user.id);
       navigate("/bestwishes/home");
     }
   }, [user, authLoading, navigate]);
@@ -49,9 +65,11 @@ const Login = () => {
 
     try {
       if (isSignUp) {
+        // ✅ Clear any existing sessions before signup
+        await supabase.auth.signOut();
+        
         await signUp(email, password, username, region);
         toast.success("Account created successfully! Logging you in...");
-        // User will be automatically redirected by useEffect
       } else {
         await signIn(email, password);
         toast.success("Welcome back!");
@@ -233,3 +251,4 @@ const Login = () => {
 };
 
 export default Login;
+

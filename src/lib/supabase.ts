@@ -11,6 +11,30 @@ if (!supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey || '');
 
+// Initialize storage bucket
+export const initializeStorage = async () => {
+  try {
+    // Check if bucket exists
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(bucket => bucket.name === 'wish-images');
+    
+    if (!bucketExists) {
+      // Create bucket if it doesn't exist
+      const { error } = await supabase.storage.createBucket('wish-images', {
+        public: true,
+        fileSizeLimit: 5242880, // 5MB
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']
+      });
+      
+      if (error) {
+        console.error('Error creating storage bucket:', error);
+      }
+    }
+  } catch (error) {
+    console.error('Error initializing storage:', error);
+  }
+};
+
 // Auth helpers
 export const signUp = async (email: string, password: string, username: string, region: string) => {
   try {
@@ -71,3 +95,6 @@ export const getCurrentUser = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   return user;
 };
+
+// Initialize storage on module load
+initializeStorage();

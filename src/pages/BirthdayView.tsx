@@ -21,6 +21,46 @@ interface WishImage {
   order_index: number;
 }
 
+// Template configurations with unique animations
+const TEMPLATES = {
+  sunset: {
+    name: "Sunset Dreams",
+    gradient: "from-orange-400 via-pink-500 to-purple-600",
+    animation: "sunset",
+    particles: "🌅"
+  },
+  starry: {
+    name: "Starry Night",
+    gradient: "from-indigo-900 via-purple-900 to-black",
+    animation: "starry",
+    particles: "⭐"
+  },
+  garden: {
+    name: "Garden Party",
+    gradient: "from-green-400 via-emerald-500 to-teal-600",
+    animation: "garden",
+    particles: "🌸"
+  },
+  ocean: {
+    name: "Ocean Breeze",
+    gradient: "from-cyan-400 via-blue-500 to-indigo-600",
+    animation: "ocean",
+    particles: "🌊"
+  },
+  cosmic: {
+    name: "Cosmic Voyage",
+    gradient: "from-purple-900 via-pink-800 to-red-900",
+    animation: "cosmic",
+    particles: "✨"
+  },
+  vintage: {
+    name: "Vintage Memories",
+    gradient: "from-amber-400 via-orange-500 to-red-500",
+    animation: "vintage",
+    particles: "📷"
+  }
+};
+
 const BirthdayView = () => {
   const { region, vipSlot, wishName } = useParams();
   const navigate = useNavigate();
@@ -32,12 +72,16 @@ const BirthdayView = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [heartsArray, setHeartsArray] = useState<Array<{ id: number; left: number }>>([]);
 
+  const template = wish?.template_id && TEMPLATES[wish.template_id as keyof typeof TEMPLATES] 
+    ? TEMPLATES[wish.template_id as keyof typeof TEMPLATES]
+    : TEMPLATES.sunset;
+
   useEffect(() => {
     fetchWishData();
   }, [region, vipSlot, wishName]);
 
   useEffect(() => {
-    // Generate floating hearts periodically
+    // Generate floating particles
     const heartInterval = setInterval(() => {
       setHeartsArray(prev => [
         ...prev,
@@ -49,7 +93,7 @@ const BirthdayView = () => {
   }, []);
 
   useEffect(() => {
-    // Clean up old hearts
+    // Clean up old particles
     const cleanup = setInterval(() => {
       setHeartsArray(prev => prev.slice(-10));
     }, 5000);
@@ -134,8 +178,8 @@ const BirthdayView = () => {
   if (!wish) return null;
 
   return (
-    <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-pink-400 via-purple-500 to-indigo-600">
-      {/* Floating Hearts */}
+    <div className={`min-h-screen relative overflow-hidden bg-gradient-to-br ${template.gradient}`}>
+      {/* Floating Particles */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {heartsArray.map((heart) => (
           <div
@@ -146,10 +190,56 @@ const BirthdayView = () => {
               animationDuration: `${4 + Math.random() * 2}s`,
             }}
           >
-            <Heart className="w-6 h-6 text-white/30 fill-white/30" />
+            <span className="text-2xl opacity-30">{template.particles}</span>
           </div>
         ))}
       </div>
+
+      {/* Template-specific animations */}
+      {template.animation === 'starry' && (
+        <div className="absolute inset-0 pointer-events-none">
+          {[...Array(100)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute animate-twinkle"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 3}s`,
+                animationDuration: `${2 + Math.random() * 2}s`,
+              }}
+            >
+              <div className="w-1 h-1 bg-white rounded-full" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {template.animation === 'ocean' && (
+        <div className="absolute inset-0 pointer-events-none opacity-30">
+          <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-white/20 to-transparent animate-wave" />
+          <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white/10 to-transparent animate-wave" style={{ animationDelay: '1s' }} />
+        </div>
+      )}
+
+      {template.animation === 'cosmic' && (
+        <div className="absolute inset-0 pointer-events-none">
+          {[...Array(50)].map((_, i) => (
+            <div
+              key={i}
+              className="absolute animate-float"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDuration: `${3 + Math.random() * 4}s`,
+                animationDelay: `${Math.random() * 2}s`,
+              }}
+            >
+              <div className="w-2 h-2 bg-purple-300 rounded-full blur-sm" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Confetti Particles */}
       <div className="absolute inset-0 pointer-events-none">
@@ -230,9 +320,11 @@ const BirthdayView = () => {
                       : "opacity-0 scale-95"
                   }`}
                 >
-                  <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center">
-                    <div className="text-6xl">📸</div>
-                  </div>
+                  <img 
+                    src={image.image_url} 
+                    alt={`Memory ${index + 1}`}
+                    className="w-full h-full object-cover"
+                  />
                   
                   {/* Photo Frame Effect */}
                   <div className="absolute inset-0 border-8 border-white/20 pointer-events-none" />
@@ -342,6 +434,26 @@ const BirthdayView = () => {
           }
         }
 
+        @keyframes twinkle {
+          0%, 100% {
+            opacity: 0;
+            transform: scale(0);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes wave {
+          0%, 100% {
+            transform: translateX(-100%) skewY(-2deg);
+          }
+          50% {
+            transform: translateX(0) skewY(2deg);
+          }
+        }
+
         .animate-float-up {
           animation: float-up linear forwards;
         }
@@ -356,6 +468,14 @@ const BirthdayView = () => {
 
         .animate-bounce-slow {
           animation: bounce-slow 2s ease-in-out infinite;
+        }
+
+        .animate-twinkle {
+          animation: twinkle ease-in-out infinite;
+        }
+
+        .animate-wave {
+          animation: wave 8s ease-in-out infinite;
         }
 
         .animation-delay-100 {

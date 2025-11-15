@@ -34,7 +34,10 @@ const StepPublish = ({ data }: StepPublishProps) => {
 
   useEffect(() => {
     if (wishName && userRegion) {
-      checkUrlAvailability();
+      const debounce = setTimeout(() => {
+        checkUrlAvailability();
+      }, 500);
+      return () => clearTimeout(debounce);
     }
   }, [wishName, userRegion]);
 
@@ -51,6 +54,7 @@ const StepPublish = ({ data }: StepPublishProps) => {
       setIsPremium(profile.is_premium);
     } catch (error) {
       console.error('Error fetching user details:', error);
+      toast.error('Failed to load user profile');
     }
   };
 
@@ -71,7 +75,6 @@ const StepPublish = ({ data }: StepPublishProps) => {
 
       if (data) {
         setUrlAvailable(false);
-        // Suggest alternative
         setSuggestedUrl(`${wishName}-${Math.floor(Math.random() * 9999)}`);
       } else {
         setUrlAvailable(true);
@@ -79,6 +82,7 @@ const StepPublish = ({ data }: StepPublishProps) => {
       }
     } catch (error) {
       console.error('Error checking URL:', error);
+      toast.error('Failed to check URL availability');
     } finally {
       setChecking(false);
     }
@@ -104,6 +108,37 @@ const StepPublish = ({ data }: StepPublishProps) => {
     }
     
     return null;
+  };
+
+  const uploadImages = async (wishId: string): Promise<string[]> => {
+    const uploadedUrls: string[] = [];
+    
+    for (let i = 0; i < data.images.length; i++) {
+      const file = data.images[i];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${wishId}/${Date.now()}-${i}.${fileExt}`;
+      
+      try {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('wish-images')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('wish-images')
+          .getPublicUrl(fileName);
+
+        uploadedUrls.push(publicUrl);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+      }
+    }
+    
+    return uploadedUrls;
   };
 
   const handlePublish = async () => {
@@ -133,6 +168,10 @@ const StepPublish = ({ data }: StepPublishProps) => {
         finalUrl = vipUrl;
       }
 
+      // Combine date and time properly
+      const birthdayTime = data.time || '00:00:00';
+      const birthdayDateTime = `${data.date.split('T')[0]}T${birthdayTime}`;
+
       // Create wish record
       const { data: wishData, error: wishError } = await supabase
         .from('wishes')
@@ -141,8 +180,8 @@ const StepPublish = ({ data }: StepPublishProps) => {
           recipient_name: data.name,
           template_id: data.template,
           status: 'scheduled',
-          birthday_date: data.date,
-          birthday_time: data.time || '00:00:00',
+          birthday_date: data.date.split('T')[0],
+          birthday_time: birthdayTime,
           privacy: data.privacy,
           password_hash: data.privacy === 'private' ? data.password : null,
           custom_url: finalUrl,
@@ -156,17 +195,17 @@ const StepPublish = ({ data }: StepPublishProps) => {
 
       // Upload images if any
       if (data.images && data.images.length > 0) {
-        const imagePromises = data.images.map(async (image: File, index: number) => {
-          // In production, you'd upload to Supabase Storage
-          // For now, we'll store placeholder URLs
-          return supabase
+        const imageUrls = await uploadImages(wishData.id);
+        
+        const imagePromises = imageUrls.map((url, index) => 
+          supabase
             .from('wish_images')
             .insert({
               wish_id: wishData.id,
-              image_url: `placeholder-${index}`,
+              image_url: url,
               order_index: index
-            });
-        });
+            })
+        );
 
         await Promise.all(imagePromises);
       }
@@ -186,6 +225,7 @@ const StepPublish = ({ data }: StepPublishProps) => {
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedUrl);
     setCopied(true);
+    toast.success("URL copied to clipboard!");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -231,14 +271,14 @@ const StepPublish = ({ data }: StepPublishProps) => {
           <div className="p-4 rounded-2xl bg-muted/50 border border-border">
             <Label className="text-sm text-muted-foreground mb-2 block">Your Wish URL</Label>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-lg font-mono text-foreground">
+              <code className="flex-1 text-lg font-mono text-foreground break-all">
                 {generatedUrl}
               </code>
               {urlAvailable === true && (
-                <Badge className="bg-green-500">Available</Badge>
+                <Badge className="bg-green-500 shrink-0">Available</Badge>
               )}
               {urlAvailable === false && !isPremium && (
-                <Badge variant="destructive">Taken</Badge>
+                <Badge variant="destructive" className="shrink-0">Taken</Badge>
               )}
             </div>
           </div>
@@ -320,6 +360,10 @@ const StepPublish = ({ data }: StepPublishProps) => {
             </span>
           </div>
           <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Images:</span>
+            <span className="font-semibold">{data.images?.length || 0} photos</span>
+          </div>
+          <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Privacy:</span>
             <Badge variant={data.privacy === "private" ? "secondary" : "outline"}>
               {data.privacy === "private" ? "🔒 Private" : "🌍 Public"}
@@ -356,7 +400,7 @@ const StepPublish = ({ data }: StepPublishProps) => {
         <Button
           size="lg"
           onClick={handlePublish}
-          disabled={publishing || (!urlAvailable && !isPremium)}
+          disabled={publishing || (!urlAvailable && !isPremium) || !wishName}
           className="rounded-2xl gradient-primary border-0 hover:opacity-90 gap-2"
         >
           {publishing ? (
@@ -370,15 +414,6 @@ const StepPublish = ({ data }: StepPublishProps) => {
               Publish Wish
             </>
           )}
-        </Button>
-        <Button
-          size="lg"
-          variant="outline"
-          className="rounded-2xl gap-2"
-          disabled={!urlAvailable && !isPremium}
-        >
-          <ExternalLink className="w-5 h-5" />
-          Preview
         </Button>
       </div>
     </div>

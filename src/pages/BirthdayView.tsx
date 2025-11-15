@@ -3,9 +3,13 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import { Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Volume2, VolumeX, Loader2, Lock } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import WelcomeScreen from "@/components/birthday/WelcomeScreen";
+import CakeCutting from "@/components/birthday/CakeCutting";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface WishData {
   id: string;
@@ -16,6 +20,7 @@ interface WishData {
   custom_url: string;
   privacy: string;
   password_hash: string | null;
+  note_message?: string;
 }
 
 interface WishImage {
@@ -24,46 +29,6 @@ interface WishImage {
   order_index: number;
 }
 
-// Template configurations with unique animations
-const TEMPLATES = {
-  sunset: {
-    name: "Sunset Dreams",
-    gradient: "from-orange-400 via-pink-500 to-purple-600",
-    particles: "💖",
-    animation: "sunset"
-  },
-  starry: {
-    name: "Starry Night",
-    gradient: "from-indigo-900 via-purple-900 to-black",
-    particles: "⭐",
-    animation: "starry"
-  },
-  garden: {
-    name: "Garden Party",
-    gradient: "from-green-400 via-emerald-500 to-teal-600",
-    particles: "🌸",
-    animation: "garden"
-  },
-  ocean: {
-    name: "Ocean Breeze",
-    gradient: "from-cyan-400 via-blue-500 to-indigo-600",
-    particles: "🌊",
-    animation: "ocean"
-  },
-  cosmic: {
-    name: "Cosmic Voyage",
-    gradient: "from-purple-900 via-pink-800 to-red-900",
-    particles: "✨",
-    animation: "cosmic"
-  },
-  vintage: {
-    name: "Vintage Memories",
-    gradient: "from-amber-400 via-orange-500 to-red-500",
-    particles: "📷",
-    animation: "vintage"
-  }
-};
-
 const BirthdayView = () => {
   const { region, vipSlot, wishName } = useParams();
   const navigate = useNavigate();
@@ -71,50 +36,22 @@ const BirthdayView = () => {
   const [images, setImages] = useState<WishImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [heartsArray, setHeartsArray] = useState<Array<{ id: number; left: number }>>([]);
-  
-  // Password protection state
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordVerified, setPasswordVerified] = useState(false);
-
-  const template = wish?.template_id && TEMPLATES[wish.template_id as keyof typeof TEMPLATES] 
-    ? TEMPLATES[wish.template_id as keyof typeof TEMPLATES]
-    : TEMPLATES.sunset;
+  const [password, setPassword] = useState("");
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     fetchWishData();
   }, [region, vipSlot, wishName]);
 
   useEffect(() => {
-    const heartInterval = setInterval(() => {
-      setHeartsArray(prev => [
-        ...prev,
-        { id: Date.now(), left: Math.random() * 100 }
-      ]);
-    }, 2000);
-
-    return () => clearInterval(heartInterval);
-  }, []);
-
-  useEffect(() => {
-    const cleanup = setInterval(() => {
-      setHeartsArray(prev => prev.slice(-10));
-    }, 5000);
-
-    return () => clearInterval(cleanup);
-  }, []);
-
-  useEffect(() => {
-    if (images.length > 0) {
+    if (images.length > 0 && step === 2) {
       const timer = setInterval(() => {
         setCurrentImageIndex((prev) => (prev + 1) % images.length);
       }, 4000);
-
       return () => clearInterval(timer);
     }
-  }, [images]);
+  }, [images, step]);
 
   const fetchWishData = async () => {
     try {
@@ -141,9 +78,9 @@ const BirthdayView = () => {
       }
 
       // Check for password protection
-      if (wishData.privacy === 'private' && wishData.password_hash && !passwordVerified) {
+      if (wishData.privacy === 'private' && wishData.password_hash) {
         setWish(wishData);
-        setShowPasswordPrompt(true);
+        setShowPasswordForm(true);
         setLoading(false);
         return;
       }
@@ -179,40 +116,43 @@ const BirthdayView = () => {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === wish?.password_hash) {
-      setPasswordVerified(true);
-      setShowPasswordPrompt(false);
-      fetchWishData(); // Reload with password verified
+    if (password === wish?.password_hash) {
+      setShowPasswordForm(false);
+      fetchWishData();
     } else {
       toast.error("Incorrect password");
-      setPasswordInput("");
+      setPassword("");
     }
+  };
+
+  const nextStep = () => {
+    setStep((prev) => prev + 1);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen gradient-primary flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-200 flex items-center justify-center">
         <div className="text-center text-white">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4" />
-          <p>Loading birthday wish...</p>
+          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-pink-600" />
+          <p className="text-gray-700">Loading birthday wish...</p>
         </div>
       </div>
     );
   }
 
   // Password prompt UI
-  if (showPasswordPrompt && !passwordVerified) {
+  if (showPasswordForm) {
     return (
-      <div className={`min-h-screen bg-gradient-to-br ${template.gradient} flex items-center justify-center p-4`}>
-        <div className="max-w-md w-full bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20 animate-scale-in">
+      <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-200 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white/90 backdrop-blur-md rounded-3xl p-8 border border-pink-200 animate-scale-in shadow-2xl">
           <div className="text-center mb-6">
-            <div className="inline-block p-4 rounded-full bg-white/20 mb-4">
-              <Lock className="w-8 h-8 text-white" />
+            <div className="inline-block p-4 rounded-full bg-pink-100 mb-4">
+              <Lock className="w-8 h-8 text-pink-600" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-2">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
               Password Protected
             </h2>
-            <p className="text-white/80">
+            <p className="text-gray-600">
               This birthday wish is private
             </p>
           </div>
@@ -220,16 +160,16 @@ const BirthdayView = () => {
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <Input
               type="password"
-              value={passwordInput}
-              onChange={(e) => setPasswordInput(e.target.value)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
-              className="rounded-2xl bg-white/20 border-white/30 text-white placeholder:text-white/50 h-12"
+              className="rounded-2xl bg-white/50 border-pink-300 h-12"
               required
               autoFocus
             />
             <Button 
               type="submit" 
-              className="w-full rounded-2xl bg-white text-primary hover:bg-white/90 h-12 font-semibold"
+              className="w-full rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 text-white h-12 font-semibold hover:opacity-90"
             >
               Unlock Birthday Wish
             </Button>
@@ -241,326 +181,187 @@ const BirthdayView = () => {
 
   if (!wish) return null;
 
+  // Step-based animation flow
   return (
-    <div className={`min-h-screen relative overflow-hidden bg-gradient-to-br ${template.gradient}`}>
-      {/* Floating Particles */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {heartsArray.map((heart) => (
-          <div
-            key={heart.id}
-            className="absolute bottom-0 animate-float-up"
-            style={{
-              left: `${heart.left}%`,
-              animationDuration: `${4 + Math.random() * 2}s`,
-            }}
-          >
-            <span className="text-2xl opacity-30">{template.particles}</span>
+    <div className="min-h-screen">
+      {step === 0 && (
+        <WelcomeScreen recipientName={wish.recipient_name} onNext={nextStep} />
+      )}
+      
+      {step === 1 && (
+        <CakeCutting onNext={nextStep} />
+      )}
+      
+      {step === 2 && (
+        <div className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-blue-100 flex items-center justify-center p-4 relative overflow-hidden">
+          {/* Floating particles */}
+          <div className="absolute inset-0 overflow-hidden">
+            {[...Array(50)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-3 h-3 bg-pink-400 rounded-full opacity-30"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                }}
+                animate={{
+                  y: [0, -100, 0],
+                  opacity: [0.3, 0.6, 0.3],
+                }}
+                transition={{
+                  duration: 3 + Math.random() * 2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: Math.random() * 2,
+                }}
+              />
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* Template-specific animations */}
-      {template.animation === 'starry' && (
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(100)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute animate-twinkle"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 3}s`,
-                animationDuration: `${2 + Math.random() * 2}s`,
-              }}
+          <div className="relative z-10 max-w-4xl w-full text-center">
+            {/* Birthday Message */}
+            <motion.div 
+              className="mb-12"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
             >
-              <div className="w-1 h-1 bg-white rounded-full" />
-            </div>
-          ))}
-        </div>
-      )}
+              <motion.div 
+                className="inline-block mb-8"
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  rotate: [0, 10, -10, 0]
+                }}
+                transition={{ 
+                  duration: 2,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+              >
+                <div className="text-9xl">🎂</div>
+              </motion.div>
+              
+              <motion.h1 
+                className="text-5xl md:text-7xl lg:text-8xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-600 to-purple-600 mb-6 drop-shadow-2xl"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                Happy Birthday
+              </motion.h1>
+              
+              <motion.h2 
+                className="text-4xl md:text-6xl lg:text-7xl font-bold text-gray-800 mb-8 drop-shadow-xl"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                {wish.recipient_name}!
+              </motion.h2>
 
-      {template.animation === 'ocean' && (
-        <div className="absolute inset-0 pointer-events-none opacity-30">
-          <div className="absolute bottom-0 left-0 right-0 h-64 bg-gradient-to-t from-white/20 to-transparent animate-wave" />
-          <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-white/10 to-transparent animate-wave" style={{ animationDelay: '1s' }} />
-        </div>
-      )}
-
-      {template.animation === 'cosmic' && (
-        <div className="absolute inset-0 pointer-events-none">
-          {[...Array(50)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute animate-float"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDuration: `${3 + Math.random() * 4}s`,
-                animationDelay: `${Math.random() * 2}s`,
-              }}
-            >
-              <div className="w-2 h-2 bg-purple-300 rounded-full blur-sm" />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Confetti Particles */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(50)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute animate-confetti"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `-${Math.random() * 20}%`,
-              animationDelay: `${Math.random() * 5}s`,
-              animationDuration: `${5 + Math.random() * 3}s`,
-            }}
-          >
-            <div
-              className="w-2 h-2 md:w-3 md:h-3 rounded-full"
-              style={{
-                background: ["#FF6B9D", "#C084FC", "#60A5FA", "#FBBF24", "#34D399"][
-                  Math.floor(Math.random() * 5)
-                ],
-              }}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Controls */}
-      <div className="absolute top-6 right-6 z-20 flex gap-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsMuted(!isMuted)}
-          className="rounded-full bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 border-2 border-white/30"
-        >
-          {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-        </Button>
-      </div>
-
-      {/* Main Content */}
-      <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6">
-        {/* Birthday Message */}
-        <div className="text-center mb-12 animate-fade-in-scale">
-          <div className="inline-block mb-8">
-            <div className="text-8xl md:text-9xl animate-bounce-slow">
-              🎂
-            </div>
-          </div>
-          
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold text-white mb-6 animate-slide-up drop-shadow-2xl">
-            Happy Birthday
-          </h1>
-          
-          <h2 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white mb-8 animate-slide-up animation-delay-200 drop-shadow-xl">
-            {wish.recipient_name}!
-          </h2>
-
-          <div className="flex flex-wrap justify-center gap-4 text-3xl md:text-5xl animate-slide-up animation-delay-400">
-            <span className="animate-bounce animation-delay-100">🎉</span>
-            <span className="animate-bounce animation-delay-200">🎈</span>
-            <span className="animate-bounce animation-delay-300">🎁</span>
-            <span className="animate-bounce animation-delay-400">✨</span>
-            <span className="animate-bounce animation-delay-500">🎊</span>
-          </div>
-        </div>
-
-        {/* Image Display */}
-        {images.length > 0 && (
-          <div className="relative w-full max-w-4xl mb-12">
-            <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-white/30 backdrop-blur-sm">
-              {images.map((image, index) => (
-                <div
-                  key={image.id}
-                  className={`absolute inset-0 transition-all duration-1000 ${
-                    index === currentImageIndex
-                      ? "opacity-100 scale-100"
-                      : "opacity-0 scale-95"
-                  }`}
-                >
-                  <img 
-                    src={image.image_url} 
-                    alt={`Memory ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  
-                  <div className="absolute inset-0 border-8 border-white/20 pointer-events-none" />
-                  
-                  {index === currentImageIndex && (
-                    <>
-                      <div className="absolute top-4 right-4 text-3xl animate-ping">
-                        ✨
-                      </div>
-                      <div className="absolute bottom-4 left-4 text-3xl animate-ping animation-delay-500">
-                        ⭐
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {images.length > 1 && (
-              <div className="flex justify-center gap-2 mt-6">
-                {images.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentImageIndex(index)}
-                    className={`w-3 h-3 rounded-full transition-all ${
-                      index === currentImageIndex
-                        ? "bg-white w-8"
-                        : "bg-white/50 hover:bg-white/75"
-                    }`}
-                  />
+              <motion.div 
+                className="flex flex-wrap justify-center gap-4 text-3xl md:text-5xl"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.7 }}
+              >
+                {['🎉', '🎈', '🎁', '✨', '🎊'].map((emoji, i) => (
+                  <motion.span
+                    key={i}
+                    animate={{ 
+                      y: [0, -20, 0],
+                      rotate: [0, 360]
+                    }}
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      delay: i * 0.2
+                    }}
+                  >
+                    {emoji}
+                  </motion.span>
                 ))}
-              </div>
+              </motion.div>
+            </motion.div>
+
+            {/* Image Display */}
+            {images.length > 0 && (
+              <motion.div 
+                className="relative w-full max-w-4xl mb-12 mx-auto"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 1 }}
+              >
+                <div className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl border-8 border-white/50 backdrop-blur-sm">
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentImageIndex}
+                      className="absolute inset-0"
+                      initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
+                      animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                      exit={{ opacity: 0, scale: 1.1, rotate: 5 }}
+                      transition={{ duration: 0.8 }}
+                    >
+                      <img 
+                        src={images[currentImageIndex].image_url} 
+                        alt={`Memory ${currentImageIndex + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Image Indicators */}
+                {images.length > 1 && (
+                  <div className="flex justify-center gap-2 mt-6">
+                    {images.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`h-3 rounded-full transition-all ${
+                          index === currentImageIndex
+                            ? "bg-pink-600 w-8"
+                            : "bg-pink-300 w-3 hover:bg-pink-400"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </motion.div>
             )}
-          </div>
-        )}
 
-        {/* Birthday Message Card */}
-        <div className="max-w-2xl mx-auto text-center">
-          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 md:p-12 border-2 border-white/30 shadow-2xl animate-fade-in-scale animation-delay-600">
-            <p className="text-xl md:text-2xl text-white leading-relaxed mb-6">
-              Wishing you a day filled with love, laughter, and all the happiness in the world! 
-              May this year bring you endless joy and unforgettable moments! 🎊
-            </p>
-            
-            <div className="flex flex-wrap justify-center gap-3 mt-8">
-              <div className="px-6 py-3 bg-white/20 rounded-full backdrop-blur-sm border border-white/30">
-                <span className="text-white font-semibold">Made with ❤️</span>
+            {/* Custom Note Message */}
+            {wish.note_message && (
+              <motion.div 
+                className="max-w-2xl mx-auto text-center mb-12"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.5 }}
+              >
+                <div className="bg-white/80 backdrop-blur-md rounded-3xl p-8 md:p-12 border-2 border-pink-200 shadow-2xl">
+                  <p className="text-xl md:text-2xl text-gray-800 leading-relaxed whitespace-pre-wrap">
+                    {wish.note_message}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Footer */}
+            <motion.div 
+              className="flex flex-wrap justify-center gap-3"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 2 }}
+            >
+              <div className="px-6 py-3 bg-white/50 rounded-full backdrop-blur-sm border border-pink-200">
+                <span className="text-gray-700 font-semibold flex items-center gap-2">
+                  Made with ❤️ by BestWishes
+                </span>
               </div>
-              <div className="px-6 py-3 bg-white/20 rounded-full backdrop-blur-sm border border-white/30">
-                <span className="text-white font-semibold">BestWishes.app</span>
-              </div>
-            </div>
+            </motion.div>
           </div>
         </div>
-
-        {/* Cake Animation */}
-        <div className="mt-12 animate-float">
-          <div className="text-7xl md:text-8xl">
-            🎂
-          </div>
-        </div>
-      </div>
-
-      {/* CSS for animations */}
-      <style>{`
-        @keyframes float-up {
-          from {
-            transform: translateY(0) rotate(0deg);
-            opacity: 1;
-          }
-          to {
-            transform: translateY(-100vh) rotate(360deg);
-            opacity: 0;
-          }
-        }
-
-        @keyframes fade-in-scale {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes slide-up {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes bounce-slow {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-30px);
-          }
-        }
-
-        @keyframes twinkle {
-          0%, 100% {
-            opacity: 0;
-            transform: scale(0);
-          }
-          50% {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes wave {
-          0%, 100% {
-            transform: translateX(-100%) skewY(-2deg);
-          }
-          50% {
-            transform: translateX(0) skewY(2deg);
-          }
-        }
-
-        .animate-float-up {
-          animation: float-up linear forwards;
-        }
-
-        .animate-fade-in-scale {
-          animation: fade-in-scale 1s ease-out forwards;
-        }
-
-        .animate-slide-up {
-          animation: slide-up 0.8s ease-out forwards;
-        }
-
-        .animate-bounce-slow {
-          animation: bounce-slow 2s ease-in-out infinite;
-        }
-
-        .animate-twinkle {
-          animation: twinkle ease-in-out infinite;
-        }
-
-        .animate-wave {
-          animation: wave 8s ease-in-out infinite;
-        }
-
-        .animation-delay-100 {
-          animation-delay: 100ms;
-        }
-
-        .animation-delay-200 {
-          animation-delay: 200ms;
-        }
-
-        .animation-delay-300 {
-          animation-delay: 300ms;
-        }
-
-        .animation-delay-400 {
-          animation-delay: 400ms;
-        }
-
-        .animation-delay-500 {
-          animation-delay: 500ms;
-        }
-
-        .animation-delay-600 {
-          animation-delay: 600ms;
-        }
-      `}</style>
+      )}
     </div>
   );
 };

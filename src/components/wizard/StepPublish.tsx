@@ -250,6 +250,7 @@ const StepPublish = ({ data }: StepPublishProps) => {
           password_hash: data.privacy === 'private' ? data.password : null,
           custom_url: finalUrl,
           music_id: data.song || 'happy',
+          note_message: data.noteMessage || null, // ✅ ADD THIS LINE
           views_count: 0
         })
         .select()

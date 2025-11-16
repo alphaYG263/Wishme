@@ -85,7 +85,16 @@ const WishRenderer = ({
   }, []);
 
   // Get transition animation
-  const getTransitionAnimation = (transitionId: string) => {
+  const getTransitionAnimation = (transitionId: string, isFirstSlide: boolean) => {
+    if (isFirstSlide) {
+      return {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: { duration: 1 },
+      };
+    }
+
     const transition = TRANSITIONS.find((t) => t.id === transitionId);
 
     switch (transitionId) {
@@ -279,7 +288,7 @@ const WishRenderer = ({
             <motion.div
               key={currentSlide.id}
               className="w-full flex flex-col items-center"
-              {...getTransitionAnimation(currentSlide.transition)}
+              {...getTransitionAnimation(currentSlide.transition, currentSlideIndex === 0)}
             >
               {renderSlide(currentSlide)}
 

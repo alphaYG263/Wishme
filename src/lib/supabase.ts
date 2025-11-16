@@ -1,17 +1,30 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://ksbgplhktuxqnhhjmjdo.supabase.co';
+// Use environment variable for Supabase URL
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ksbgplhktuxqnhhjmjdo.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseAnonKey) {
-  console.error('Missing VITE_SUPABASE_ANON_KEY environment variable!');
+  console.error('❌ Missing VITE_SUPABASE_ANON_KEY environment variable!');
+  throw new Error('Supabase configuration is incomplete');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey || '');
+if (!supabaseUrl) {
+  console.error('❌ Missing VITE_SUPABASE_URL environment variable!');
+  throw new Error('Supabase configuration is incomplete');
+}
 
-// ❌ REMOVE the initializeStorage function and its call
-// The bucket is now created via SQL above
+console.log('✅ Supabase URL:', supabaseUrl);
+console.log('✅ Supabase Key exists:', !!supabaseAnonKey);
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 // Auth helpers
 export const signUp = async (email: string, password: string, username: string, region: string) => {

@@ -3,8 +3,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, LogOut, Loader2, RefreshCw, ExternalLink, Copy, Eye } from "lucide-react";
+import { Plus, LogOut, Loader2, RefreshCw, ExternalLink, Copy, Eye, AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import PremiumBanner from "@/components/PremiumBanner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +31,7 @@ const Home = () => {
   const [username, setUsername] = useState("");
   const [region, setRegion] = useState("");
   const [isPremium, setIsPremium] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -38,25 +40,32 @@ const Home = () => {
     }
   }, [user]);
 
-// src/pages/Home.tsx - REPLACE fetchUserProfile function
-
   const fetchUserProfile = async () => {
     try {
+      setConnectionError(false);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('username, region, is_premium')
         .eq('id', user?.id)
-        .maybeSingle(); // ✅ Changed from .single() to .maybeSingle()
+        .maybeSingle();
 
       if (error) {
+        // Check if it's a network error
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+          setConnectionError(true);
+          toast.error('Connection error. Please check your internet.');
+        }
+        
         console.error('Profile fetch error:', error);
-        // ✅ Use fallback data from user metadata
+        
+        // Use fallback data
         setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
-        setRegion(user?.user_metadata?.region || "Unknown");
+        setRegion(user?.user_metadata?.region || "AS");
         setIsPremium(false);
         
-        // ✅ Try to create profile if it doesn't exist
-        if (user?.id) {
+        // Try to create profile if it doesn't exist
+        if (user?.id && !error.message.includes('fetch')) {
           console.log('Profile not found, creating one...');
           const { error: createError } = await supabase
             .from('profiles')
@@ -70,10 +79,8 @@ const Home = () => {
           
           if (createError) {
             console.error('Failed to create profile:', createError);
-            toast.warning('Using temporary profile. Some features may be limited.');
           } else {
-            toast.success('Profile created!');
-            // Refresh to get new profile
+            toast.success('Profile created successfully!');
             fetchUserProfile();
           }
         }
@@ -83,24 +90,30 @@ const Home = () => {
       if (data) {
         setUsername(data.username);
         setRegion(data.region);
-        setIsPremium(data.is_premium);
+        setIsPremium(data.is_premium || false);
       } else {
-        // ✅ No profile exists - use fallback
+        // Use fallback
         setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
-        setRegion(user?.user_metadata?.region || "Unknown");
+        setRegion(user?.user_metadata?.region || "AS");
         setIsPremium(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching profile:', error);
-      // ✅ Always provide fallback
+      setConnectionError(true);
+      
+      // Always provide fallback
       setUsername(user?.user_metadata?.username || user?.email?.split('@')[0] || "User");
-      setRegion(user?.user_metadata?.region || "Unknown");
+      setRegion(user?.user_metadata?.region || "AS");
       setIsPremium(false);
+      
+      toast.error('Could not connect to server. Using offline mode.');
     }
   };
 
   const fetchWishes = async (showRefreshToast = false) => {
     try {
+      setConnectionError(false);
+      
       if (showRefreshToast) setRefreshing(true);
       else setLoading(true);
 
@@ -110,7 +123,15 @@ const Home = () => {
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a network error
+        if (error.message.includes('fetch') || error.message.includes('network')) {
+          setConnectionError(true);
+          toast.error('Connection error. Cannot load wishes.');
+        }
+        throw error;
+      }
+      
       setWishes(data || []);
       
       if (showRefreshToast) {
@@ -118,7 +139,8 @@ const Home = () => {
       }
     } catch (error: any) {
       console.error('Error fetching wishes:', error);
-      toast.error(error.message || 'Failed to load wishes');
+      setConnectionError(true);
+      toast.error('Could not connect to server');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -240,6 +262,24 @@ const Home = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Connection Error Alert */}
+        {connectionError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Cannot connect to server. Please check your internet connection and Supabase configuration.
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => fetchWishes(true)}
+                className="ml-4"
+              >
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="mb-8 animate-fade-in">
           <h2 className="text-3xl font-bold mb-2">Your Birthday Wishes</h2>
           <p className="text-muted-foreground">

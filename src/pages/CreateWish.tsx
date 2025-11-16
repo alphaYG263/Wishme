@@ -38,6 +38,7 @@ const CreateWish = () => {
 
   const [formData, setFormData] = useState<WishFormData>({
     recipientName: "",
+    birthdayDate: "", 
     gradient: "sunset",
     slides: [
       {
@@ -56,7 +57,6 @@ const CreateWish = () => {
     musicPreset: "happy-classic",
     privacy: "public",
     customUrl: "",
-    birthdayDate: "",
     birthdayTime: "00:00",
   });
 
@@ -98,7 +98,7 @@ const CreateWish = () => {
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return formData.recipientName.trim().length > 0;
+        return formData.recipientName.trim().length > 0 && formData.birthdayDate !== "";
       case 2:
         return formData.gradient !== "";
       case 3:
